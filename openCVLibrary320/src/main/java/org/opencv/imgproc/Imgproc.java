@@ -574,9 +574,9 @@ public class Imgproc {
     //javadoc: moments(array, binaryImage)
     public static Moments moments(Mat array, boolean binaryImage)
     {
-        
+
         Moments retVal = new Moments(moments_0(array.nativeObj, binaryImage));
-        
+
         return retVal;
     }
 

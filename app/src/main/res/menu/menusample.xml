@@ -1,9 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-        <item android:id="@+id/item1"
-           android:title="yes"></item>
-        <item android:id="@+id/item2"
-            android:title="hello" >
+        <item android:id="@+id/mItemPreviewRGBA"
+           android:title="Preview RGBA">
         </item>
+        <item android:id="@+id/mItemPreviewHist"
+            android:title="Histograms" >
+        </item>
+        <item android:id="@+id/mItemPreviewCanny"
+            android:title="Canny" >
+        </item>
+        <item android:id="@+id/mItemPreviewSepia"
+            android:title="Sepia" >
+        </item>
+        <item android:id="@+id/mItemPreviewSobel"
+            android:title="Sobel" >
+        </item>
+        <item android:id="@+id/mItemPreviewZoom"
+            android:title="Zoom" >
+        </item>
+        <item android:id="@+id/mItemPreviewPixelize"
+            android:title="Pixelize" >
+        </item>
+        <item android:id="@+id/mItemPreviewPosterize"
+            android:title="Posterize" >
+        </item>
+
 </menu>

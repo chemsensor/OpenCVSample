@@ -7,7 +7,8 @@
     <application
         android:label="@string/app_name"
         android:icon="@drawable/icon"
-        android:theme="@style/AppTheme" >
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar" >
 
         <activity android:name="sensor.opencvsample.MainActivity"
             android:label="@string/app_name"

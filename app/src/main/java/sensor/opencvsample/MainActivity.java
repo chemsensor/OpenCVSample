@@ -1,6 +1,9 @@
 package sensor.opencvsample;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -11,42 +14,48 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.imgproc.Moments;
 import org.opencv.samples.imagemanipulations.R;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.WindowManager;
-//////
-public class MainActivity extends Activity implements CvCameraViewListener2 {
+
+public class MainActivity extends AppCompatActivity implements CvCameraViewListener2 {
     private static final String  TAG                 = "OCVSample::Activity";
 
-    public static final int      VIEW_MODE_RGBA      = 0;
-    public static final int      VIEW_MODE_HIST      = 1;
-    public static final int      VIEW_MODE_CANNY     = 2;
-    public static final int      VIEW_MODE_SEPIA     = 3;
-    public static final int      VIEW_MODE_SOBEL     = 4;
-    public static final int      VIEW_MODE_ZOOM      = 5;
-    public static final int      VIEW_MODE_PIXELIZE  = 6;
-    public static final int      VIEW_MODE_POSTERIZE = 7;
+    public static final int      VIEW_MODE_RGBA         = 0;
+    public static final int      VIEW_MODE_HIST         = 1;
+    public static final int      VIEW_MODE_STATIC_ROI   = 2;
+    public static final int      VIEW_MODE_CONTOURS     = 3;
+    public static final int      VIEW_MODE_MASK         = 4;
+    public static final int      VIEW_MODE_BLOBDETECT   = 5;
+    public static final int      VIEW_MODE_REGISTER     = 6;
 
     private MenuItem             mItemPreviewRGBA;
     private MenuItem             mItemPreviewHist;
-    private MenuItem             mItemPreviewCanny;
-    private MenuItem             mItemPreviewSepia;
-    private MenuItem             mItemPreviewSobel;
-    private MenuItem             mItemPreviewZoom;
-    private MenuItem             mItemPreviewPixelize;
-    private MenuItem             mItemPreviewPosterize;
+    private MenuItem             mItemPreviewStatic;
+    private MenuItem             mItemPreviewContours;
+    private MenuItem             mItemPreviewMask;
+    private MenuItem             mItemPreviewBlobDetect;
+    private MenuItem             mItemPreviewRegister;
+
+    private Toolbar toolbar;
+
     private CameraBridgeViewBase mOpenCvCameraView;
 
     private Size                 mSize0;
@@ -64,6 +73,28 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
     private Point                mP2;
     private float                mBuff[];
     private Mat                  mSepiaKernel;
+
+
+    // Initialize Matricies.
+    private Mat                  zoomCorner;
+    private Mat                  mZoomWindow;
+    private Mat                  rgbROI;
+    private Mat                  rgbBlob;
+    private List<MatOfPoint> mContours;
+    private Size                 wsize;
+
+
+
+    //blob detector variables
+    private boolean              mIsColorSelected = false;
+    private Mat                  mRgba;
+    private Scalar               mBlobColorRgba;
+    private Scalar               mBlobColorHsv;
+    private Mat                  mSpectrum;
+    private Size                 SPECTRUM_SIZE;
+    private Scalar               CONTOUR_COLOR;
+    private Scalar               DOT_COLOR;
+
 
     public static int           viewMode = VIEW_MODE_HIST;
 
@@ -100,6 +131,10 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
         mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        toolbar = (Toolbar)findViewById(R.id.my_Toolbar);
+        setSupportActionBar(toolbar);
+
     }
 
     @Override
@@ -131,17 +166,16 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menusample, menu);
+        //super.onCreateOptionsMenu(menu);
+        //MenuInflater inflater = getMenuInflater();
+        //inflater.inflate(R.menu.menusample, menu);
         Log.i(TAG, "called onCreateOptionsMenu");
         mItemPreviewRGBA  = menu.add("Preview RGBA");
         mItemPreviewHist  = menu.add("Histograms");
-        mItemPreviewCanny = menu.add("Canny");
-        mItemPreviewSepia = menu.add("Sepia");
-        mItemPreviewSobel = menu.add("Sobel");
-        mItemPreviewZoom  = menu.add("Zoom");
-        mItemPreviewPixelize  = menu.add("Pixelize");
-        mItemPreviewPosterize = menu.add("Posterize");
+        mItemPreviewStatic  = menu.add("Histogram (Static)");
+        mItemPreviewContours = menu.add("Contours");
+        mItemPreviewMask = menu.add("Check Mask");
+        mItemPreviewBlobDetect = menu.add("Blob Detector");
         return true;
     }
 
@@ -152,18 +186,18 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             viewMode = VIEW_MODE_RGBA;
         if (item == mItemPreviewHist)
             viewMode = VIEW_MODE_HIST;
-        else if (item == mItemPreviewCanny)
-            viewMode = VIEW_MODE_CANNY;
-        else if (item == mItemPreviewSepia)
-            viewMode = VIEW_MODE_SEPIA;
-        else if (item == mItemPreviewSobel)
-            viewMode = VIEW_MODE_SOBEL;
-        else if (item == mItemPreviewZoom)
-            viewMode = VIEW_MODE_ZOOM;
-        else if (item == mItemPreviewPixelize)
-            viewMode = VIEW_MODE_PIXELIZE;
-        else if (item == mItemPreviewPosterize)
-            viewMode = VIEW_MODE_POSTERIZE;
+        else if (item == mItemPreviewContours)
+            viewMode = VIEW_MODE_CONTOURS;
+        else if (item == mItemPreviewMask)
+            viewMode = VIEW_MODE_MASK;
+        else if (item == mItemPreviewBlobDetect)
+            viewMode = VIEW_MODE_BLOBDETECT;
+        else if (item == mItemPreviewStatic)
+            viewMode = VIEW_MODE_STATIC_ROI;
+        else if (item == mItemPreviewRegister)
+            viewMode = VIEW_MODE_REGISTER;
+
+
         return true;
     }
 
@@ -183,6 +217,15 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
                 new Scalar(0, 120, 255, 255), new Scalar(0, 60, 255, 255),  new Scalar(0, 0, 255, 255),   new Scalar(64, 0, 255, 255),  new Scalar(120, 0, 255, 255),
                 new Scalar(180, 0, 255, 255), new Scalar(255, 0, 255, 255), new Scalar(255, 0, 215, 255), new Scalar(255, 0, 85, 255),  new Scalar(255, 0, 0, 255)
         };
+        // BLOB DETECTOR
+        mRgba = new Mat(height, width, CvType.CV_8UC4);
+        mSpectrum = new Mat();
+        mBlobColorRgba = new Scalar(255);
+        mBlobColorHsv = new Scalar(255);
+        SPECTRUM_SIZE = new Size(200, 64);
+        CONTOUR_COLOR = new Scalar(0, 100, 0, 255);
+        DOT_COLOR = new Scalar(255,0,0);
+        // END
         mWhilte = Scalar.all(255);
         mP1 = new Point();
         mP2 = new Point();
@@ -201,13 +244,20 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
             mIntermediateMat.release();
 
         mIntermediateMat = null;
+        mRgba.release();
+
     }
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Mat rgba = inputFrame.rgba();
         Size sizeRgba = rgba.size();
+        Mat mRoi = new Mat();
 
         Mat rgbaInnerWindow;
+        Mat mPyrDownMat = new Mat();//temp for blob
+        Mat mHsvMat = new Mat();//temp for blob
+
+
 
         int rows = (int) sizeRgba.height;
         int cols = (int) sizeRgba.width;
@@ -217,6 +267,17 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
         int width = cols * 3 / 4;
         int height = rows * 3 / 4;
+
+        //Declare base dimensions for the submatrix (full screen).
+        int x1 = 0;
+        int x2 = cols;
+        int y1 = 0;
+        int y2 = rows;
+        rgbROI = rgba.submat(y1, y2, x1, x2); //create submatrix rgbROI that is the region of interest for finding hue etc...
+
+        int num = rows/16;
+        int xStart = rows/16;
+
 
         switch (MainActivity.viewMode) {
             case MainActivity.VIEW_MODE_RGBA:
@@ -262,62 +323,278 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
                     Imgproc.line(rgba, mP1, mP2, mColorsHue[h], thikness);
                 }
                 break;
+            case MainActivity.VIEW_MODE_STATIC_ROI:
 
-            case MainActivity.VIEW_MODE_CANNY:
-                rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-                Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, 80, 90);
-                Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-                rgbaInnerWindow.release();
+                x1 = cols / 2 - 9 * cols / 100;
+                x2 = cols / 2 + 9 * cols / 100;
+                y1 = rows / 2 - 9 * rows / 100;
+                y2 = rows / 2 + 9 * rows / 100;
+                rgbROI = rgba.submat(y1, y2, x1, x2);
+                Analysis.findHist(rgba, rgbROI, true, true, true, 1);
+
                 break;
 
-            case MainActivity.VIEW_MODE_SOBEL:
-                Mat gray = inputFrame.gray();
-                Mat grayInnerWindow = gray.submat(top, top + height, left, left + width);
-                rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-                Imgproc.Sobel(grayInnerWindow, mIntermediateMat, CvType.CV_8U, 1, 1);
-                Core.convertScaleAbs(mIntermediateMat, mIntermediateMat, 10, 0);
-                Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-                grayInnerWindow.release();
-                rgbaInnerWindow.release();
-                break;
+            //Display Histogram for the 4 boxes and a white balance area on a Whatman pH strip.
+            case MainActivity.VIEW_MODE_CONTOURS:
+                //Blob detection Hue
+                mRgba = inputFrame.rgba();
 
-            case MainActivity.VIEW_MODE_SEPIA:
-                rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-                Core.transform(rgbaInnerWindow, rgbaInnerWindow, mSepiaKernel);
-                rgbaInnerWindow.release();
-                break;
+                FindContours mContour = new FindContours();
+                mContour.detect(mRgba);
+                List<MatOfPoint> contours = mContour.getContours();
+                Log.e(TAG, "Contours count: " + contours.size());
+                Imgproc.drawContours(mRgba, contours, -1, CONTOUR_COLOR);
 
-            case MainActivity.VIEW_MODE_ZOOM:
-                Mat zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
-                Mat mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
-                Imgproc.resize(mZoomWindow, zoomCorner, zoomCorner.size());
-                Size wsize = mZoomWindow.size();
-                Imgproc.rectangle(mZoomWindow, new Point(1, 1), new Point(wsize.width - 2, wsize.height - 2), new Scalar(255, 0, 0, 255), 2);
+                zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
+                mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
+                mRoi = Mask.getMask(mZoomWindow, true);
+                Imgproc.resize(mRoi, zoomCorner, zoomCorner.size());
+                wsize = mZoomWindow.size();
                 zoomCorner.release();
                 mZoomWindow.release();
+
                 break;
 
-            case MainActivity.VIEW_MODE_PIXELIZE:
-                rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-                Imgproc.resize(rgbaInnerWindow, mIntermediateMat, mSize0, 0.1, 0.1, Imgproc.INTER_NEAREST);
-                Imgproc.resize(mIntermediateMat, rgbaInnerWindow, rgbaInnerWindow.size(), 0., 0., Imgproc.INTER_NEAREST);
-                rgbaInnerWindow.release();
+            //Empty view mode.
+            case MainActivity.VIEW_MODE_MASK:
+                x1 = cols / 2 - 9 * cols / 100;
+                x2 = cols / 2 + 9 * cols / 100;
+                y1 = rows / 2 - 9 * rows / 100;
+                y2 = rows / 2 + 9 * rows / 100;
+                rgbROI = rgba.submat(y1, y2, x1, x2);
+                Analysis.findHist(rgba, rgbROI, true, true, true, 1);
+
+                mRoi = Mask.getMask(rgbROI, true);
+
+                zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
+                mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
+                mRoi = Mask.getMask(mZoomWindow, true);
+                Imgproc.resize(mRoi, zoomCorner, zoomCorner.size());
+                wsize = mZoomWindow.size();
+                zoomCorner.release();
+                mZoomWindow.release();
+
                 break;
 
-            case MainActivity.VIEW_MODE_POSTERIZE:
-            /*
-            Imgproc.cvtColor(rgbaInnerWindow, mIntermediateMat, Imgproc.COLOR_RGBA2RGB);
-            Imgproc.pyrMeanShiftFiltering(mIntermediateMat, mIntermediateMat, 5, 50);
-            Imgproc.cvtColor(mIntermediateMat, rgbaInnerWindow, Imgproc.COLOR_RGB2RGBA);
-            */
-                rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-                Imgproc.Canny(rgbaInnerWindow, mIntermediateMat, 80, 90);
-                rgbaInnerWindow.setTo(new Scalar(0, 0, 0, 255), mIntermediateMat);
-                Core.convertScaleAbs(rgbaInnerWindow, mIntermediateMat, 1./16, 0);
-                Core.convertScaleAbs(mIntermediateMat, rgbaInnerWindow, 16, 0);
-                rgbaInnerWindow.release();
+            //Test view mode.
+            case MainActivity.VIEW_MODE_BLOBDETECT:
+
+                mRgba = inputFrame.rgba();
+                Mat                  hsvROI = new Mat(); //create hsv matrix.
+                Mat                  maskROI = new Mat(); //Create mask matrix.
+                Mat                  maskGreyROI = new Mat(); //Create inverse mask matrix?
+                Mat                  colorROI = new Mat(); //Create masked matrix (only showing colored regions).
+
+                Imgproc.cvtColor(mRgba, hsvROI, Imgproc.COLOR_RGB2HSV_FULL); //Go from rgb to hsv of submatrix, and output an intermediate matrix.
+
+
+                //////////////
+                //Blue
+                //////////////
+                // Set lower and upper limits for mask.
+                Scalar BlueCircleLower_lim = new Scalar(156,20,0);
+                Scalar BlueCircleUpper_lim = new Scalar(184,255,255);
+                //Set mask matrix based on lower/upper limits using hsv matrix.
+                Core.inRange(hsvROI,BlueCircleLower_lim, BlueCircleUpper_lim, maskROI);
+
+                FindContours mShape = new FindContours();
+
+                List<MatOfPoint> mContours = new ArrayList<MatOfPoint>();
+                contours = new ArrayList<>();
+                MatOfPoint maxContour = new MatOfPoint();
+                Mat mHierarchy = new Mat();
+
+                Imgproc.findContours(maskROI, contours, mHierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+                // Find max contour area
+                double maxArea = 0;
+                Iterator<MatOfPoint> each = contours.iterator();
+                while (each.hasNext()) {
+                    MatOfPoint wrapper = each.next();
+                    double area = Imgproc.contourArea(wrapper);
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxContour = wrapper;
+                    }
+                }
+                mContours.add(maxContour);
+
+                //maskImg = Mask.blue(mRgba);
+                //List<MatOfPoint> cont3 = mShape.maskDetect(maskImg);
+
+                //instead of drawing contours, draw a circle with Imgproc.circle()
+                Point blueCenter = new Point();
+//                Moments newMoments =new Moments(maxContour);
+//                center.x = newMoments.get_m10() / newMoments.get_m00();
+//                center.y = newMoments.get_m01() / newMoments.get_m00();
+                Imgproc.drawContours(mRgba, mContours, -1, CONTOUR_COLOR);
+
+                //bounding rectangle to find center point
+                Rect rectangle = Imgproc.boundingRect(maxContour);
+                blueCenter.x = rectangle.x+rectangle.width/2;
+                blueCenter.y = rectangle.y+rectangle.height/2;
+                Imgproc.circle(mRgba, blueCenter, 5, DOT_COLOR);
+
+
+                //////////////
+                //Yellow
+                //////////////
+                // Set lower and upper limits for mask.
+                Scalar YellowCircleLower_lim = new Scalar(28,80,0);
+                Scalar YellowCircleUpper_lim = new Scalar(57,255,255);
+                //Set mask matrix based on lower/upper limits using hsv matrix.
+                Core.inRange(hsvROI,YellowCircleLower_lim, YellowCircleUpper_lim, maskROI);
+
+                Imgproc.findContours(maskROI, contours, mHierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+                // Find max contour area
+                maxArea = 0;
+                each = contours.iterator();
+                while (each.hasNext()) {
+                    MatOfPoint wrapper = each.next();
+                    double area = Imgproc.contourArea(wrapper);
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxContour = wrapper;
+                    }
+                }
+                mContours.add(maxContour);
+
+                //maskImg = Mask.blue(mRgba);
+                //List<MatOfPoint> cont3 = mShape.maskDetect(maskImg);
+
+                //bounding rectangle to find center point
+                Point yellowCenter = new Point();
+                rectangle = Imgproc.boundingRect(maxContour);
+                yellowCenter.x = rectangle.x+rectangle.width/2;
+                yellowCenter.y = rectangle.y+rectangle.height/2;
+                Imgproc.circle(mRgba, yellowCenter, 5, DOT_COLOR);
+
+                //instead of drawing contours, draw a circle with Imgproc.circle()
+                //Imgproc.circle(mRgba, mShape.findCoord(mContours),5, DOT_COLOR);
+                Imgproc.drawContours(mRgba, mContours, -1, CONTOUR_COLOR);
+
+
+                //////////////
+                //Green
+                //////////////
+                // Set lower and upper limits for mask.
+                Scalar GreenCircleLower_lim = new Scalar(57,20,0);
+                Scalar GreenCircleUpper_lim = new Scalar(85,255,255);
+                //Set mask matrix based on lower/upper limits using hsv matrix.
+                Core.inRange(hsvROI,GreenCircleLower_lim, GreenCircleUpper_lim, maskROI);
+
+                Imgproc.findContours(maskROI, contours, mHierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+                // Find max contour area
+                maxArea = 0;
+                each = contours.iterator();
+                while (each.hasNext()) {
+                    MatOfPoint wrapper = each.next();
+                    double area = Imgproc.contourArea(wrapper);
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxContour = wrapper;
+                    }
+                }
+                mContours.add(maxContour);
+
+                //maskImg = Mask.blue(mRgba);
+                //List<MatOfPoint> cont3 = mShape.maskDetect(maskImg);
+
+                //bounding rectangle to find center point
+                Point greenCenter = new Point();
+                rectangle = Imgproc.boundingRect(maxContour);
+                greenCenter.x = rectangle.x+rectangle.width/2;
+                greenCenter.y = rectangle.y+rectangle.height/2;
+                Imgproc.circle(mRgba, greenCenter, 5, DOT_COLOR);
+
+                //instead of drawing contours, draw a circle with Imgproc.circle()
+                //Imgproc.circle(mRgba, mShape.findCoord(mContours),5, DOT_COLOR);
+                Imgproc.drawContours(mRgba, mContours, -1, CONTOUR_COLOR);
+
+
+                //////////////
+                //Cyan
+                //////////////
+                // Set lower and upper limits for mask.
+                Scalar CyanCircleLower_lim = new Scalar(123,60,0);
+                Scalar CyanCircleUpper_lim = new Scalar(152,255,255);
+                //Set mask matrix based on lower/upper limits using hsv matrix.
+                Core.inRange(hsvROI,CyanCircleLower_lim, CyanCircleUpper_lim, maskROI);
+
+                Imgproc.findContours(maskROI, contours, mHierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+                // Find max contour area
+                maxArea = 0;
+                each = contours.iterator();
+                while (each.hasNext()) {
+                    MatOfPoint wrapper = each.next();
+                    double area = Imgproc.contourArea(wrapper);
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxContour = wrapper;
+                    }
+                }
+                mContours.add(maxContour);
+
+                //maskImg = Mask.blue(mRgba);
+                //List<MatOfPoint> cont3 = mShape.maskDetect(maskImg);
+
+                //bounding rectangle to find center point
+                Point cyanCenter = new Point();
+                rectangle = Imgproc.boundingRect(maxContour);
+                cyanCenter.x = rectangle.x+rectangle.width/2;
+                cyanCenter.y = rectangle.y+rectangle.height/2;
+                Imgproc.circle(mRgba, cyanCenter, 5, DOT_COLOR);
+
+                //instead of drawing contours, draw a circle with Imgproc.circle()
+                //Imgproc.circle(mRgba, mShape.findCoord(mContours),5, DOT_COLOR);
+                Imgproc.drawContours(mRgba, mContours, -1, CONTOUR_COLOR);
+
+
+
+
+//                maskImg = Mask.yellow(inputFrame.rgba());
+//                List<MatOfPoint> cont4 = mShape.maskDetect(maskImg);
+//                Imgproc.drawContours(mRgba, cont4, -1, CONTOUR_COLOR);
+
+//                maskImg = Mask.cyan(inputFrame.rgba());
+//                List<MatOfPoint> cont1 = mShape.maskDetect(maskImg);
+//                Imgproc.drawContours(mRgba, cont1, -1, CONTOUR_COLOR);
+//
+//                maskImg = Mask.magenta(inputFrame.rgba());
+//                List<MatOfPoint> cont2 = mShape.maskDetect(maskImg);
+//                Imgproc.drawContours(mRgba, cont2, -1, CONTOUR_COLOR);
+
+
+                //warp image to fit to smaller window on frame
+                zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
+                mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
+                //look into new config for dst, compare with python code in processlivevideoperoxidaise
+//                Mat dst = new Mat(4,1,CvType.CV_32FC2);
+//                dst.put(0,0,blueCenter.x,blueCenter.y,yellowCenter.x,yellowCenter.y, greenCenter.x,greenCenter.y, cyanCenter.x, cyanCenter.y);
+//                Mat warp = Imgproc.getPerspectiveTransform(mRgba,dst);
+
+//                Imgproc.warpAffine(mRgba,dst,warp,new Size(80,45));
+//                Imgproc.resize(warp, zoomCorner, zoomCorner.size());
+
+                wsize = mZoomWindow.size();
+                zoomCorner.release();
+                mZoomWindow.release();
+
+
                 break;
+
+            //register method set lower and upper limits and call centers draw red dots on screen
+            case MainActivity.VIEW_MODE_REGISTER:
+
+                Core YellowCircleMask;
+
+            //END
+
         }
+
 
         return rgba;
     }
