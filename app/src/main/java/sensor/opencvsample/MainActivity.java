@@ -24,6 +24,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
 import org.opencv.samples.imagemanipulations.R;
+import org.opencv.utils.Converters;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -223,7 +224,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mBlobColorRgba = new Scalar(255);
         mBlobColorHsv = new Scalar(255);
         SPECTRUM_SIZE = new Size(200, 64);
-        CONTOUR_COLOR = new Scalar(0, 100, 0, 255);
+        CONTOUR_COLOR = new Scalar(100, 0, 0, 255);
         DOT_COLOR = new Scalar(255,0,0);
         // END
         mWhilte = Scalar.all(255);
@@ -553,6 +554,40 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
                 Imgproc.drawContours(mRgba, mContours, -1, CONTOUR_COLOR);
 
 
+                //Image Registration and processing
+                ArrayList<Point> ptsFound = new ArrayList<>();
+                ptsFound.add(yellowCenter);
+                ptsFound.add(greenCenter);
+                ptsFound.add(cyanCenter);
+                ptsFound.add(blueCenter);
+
+
+                ArrayList<Point> ptsAssigned = new ArrayList<>();
+                ptsAssigned.add(new Point(0,0));
+                ptsAssigned.add(new Point(850,0));
+                ptsAssigned.add(new Point(850,400));
+                ptsAssigned.add(new Point(0,400));
+
+                Mat src = Converters.vector_Point2f_to_Mat(ptsFound);
+                Mat dst = Converters.vector_Point2f_to_Mat(ptsAssigned);
+
+                if (yellowCenter != null && greenCenter != null && cyanCenter != null && blueCenter != null) {
+                    Mat warp = Imgproc.getPerspectiveTransform(src, dst);
+
+                    //warp image to fit to smaller window on frame
+                    zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
+                    mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
+                    wsize = mZoomWindow.size();
+
+                    //warp the image
+                    Imgproc.warpPerspective(mRgba, zoomCorner, warp, wsize, Imgproc.INTER_CUBIC);
+
+                    mRoi = Mask.getMask(mRoi, true);
+                    Imgproc.resize(mRoi, zoomCorner, zoomCorner.size());
+                    wsize = mZoomWindow.size();
+                    zoomCorner.release();
+                    mZoomWindow.release();
+                }
 
 
 //                maskImg = Mask.yellow(inputFrame.rgba());
@@ -568,21 +603,25 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
 //                Imgproc.drawContours(mRgba, cont2, -1, CONTOUR_COLOR);
 
 
-                //warp image to fit to smaller window on frame
-                zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);
-                mZoomWindow = rgba.submat(rows / 2 - 9 * rows / 100, rows / 2 + 9 * rows / 100, cols / 2 - 9 * cols / 100, cols / 2 + 9 * cols / 100);
-                //look into new config for dst, compare with python code in processlivevideoperoxidaise
+//////////////////IMAGE REFACTORING
 //                Mat dst = new Mat(4,1,CvType.CV_32FC2);
 //                dst.put(0,0,blueCenter.x,blueCenter.y,yellowCenter.x,yellowCenter.y, greenCenter.x,greenCenter.y, cyanCenter.x, cyanCenter.y);
 //                Mat warp = Imgproc.getPerspectiveTransform(mRgba,dst);
-
+//                dst = mRgba.clone();
+//                Imgproc.warpPerspective(mRgba,dst,warp,new Size(600,400));
+//
+//                //warp image to fit to smaller window on frame
+//                zoomCorner = rgba.submat(0, rows / 2 - rows / 10, 0, cols / 2 - cols / 10);//zoomed corner
+//                mZoomWindow = rgba.submat((int)yellowCenter.x,(int) yellowCenter.y,(int)cyanCenter.x,(int)cyanCenter.y);//what is zoomed in on
+//
+//                mRoi = Mask.getMask(mZoomWindow, true);
+//                Imgproc.resize(mRoi, zoomCorner, zoomCorner.size());
+//                wsize = mZoomWindow.size();
+//                zoomCorner.release();
+//                mZoomWindow.release();
+//
 //                Imgproc.warpAffine(mRgba,dst,warp,new Size(80,45));
 //                Imgproc.resize(warp, zoomCorner, zoomCorner.size());
-
-                wsize = mZoomWindow.size();
-                zoomCorner.release();
-                mZoomWindow.release();
-
 
                 break;
 
